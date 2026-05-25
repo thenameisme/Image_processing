@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BG Remover</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --text: #e8e8f0;
+    --muted: #888898;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: 48px 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+
+  .mode-pill {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-left: auto;
+  }
+
+  .mode-pill button {
+    padding: 5px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mode-pill button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  label.upload {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 5px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+
+  label.upload:hover { border-color: var(--accent); }
+  input[type=file] { display: none; }
+
+  .canvases {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  .canvas-wrap {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .canvas-wrap canvas {
+    max-width: 100%;
+    max-height: 100%;
+    cursor: crosshair;
+    display: block;
+  }
+
+  #dstCanvas {
+    background-image: repeating-conic-gradient(#1a1a22 0% 25%, #252530 0% 50%);
+    background-size: 18px 18px;
+  }
+
+  .canvas-label {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .empty-state svg { opacity: 0.3; }
+
+  .panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* Color slots */
+  .color-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .color-slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.15s;
+    position: relative;
+  }
+
+  .color-slot.active-slot { border-color: var(--accent); }
+  .color-slot.has-color { border-color: var(--border); }
+
+  .slot-check {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .slot-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .slot-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .slot-hex {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .slot-hsv {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  .slot-clear {
+    width: 16px;
+    height: 16px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .color-slot:hover .slot-clear { opacity: 1; }
+
+  .slot-empty-hint {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* HSV Range sliders */
+  .hsv-ranges { display: flex; flex-direction: column; gap: 14px; }
+
+  .range-row { display: flex; flex-direction: column; gap: 5px; }
+
+  .range-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .range-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .range-values {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  /* Dual range slider */
+  .dual-range {
+    position: relative;
+    height: 28px;
+    display: flex;
+    align-items: center;
+  }
+
+  .dual-range .track {
+    position: absolute;
+    left: 0; right: 0;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .dual-range .fill {
+    position: absolute;
+    height: 4px;
+    border-radius: 2px;
+    pointer-events: none;
+    background: var(--accent);
+  }
+
+  .dual-range input[type=range] {
+    position: absolute;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: none;
+    outline: none;
+  }
+
+  .dual-range input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    pointer-events: all;
+    box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+    transition: box-shadow 0.15s;
+  }
+
+  .dual-range input[type=range]::-webkit-slider-thumb:hover,
+  .dual-range input[type=range]:active::-webkit-slider-thumb {
+    box-shadow: 0 0 0 5px rgba(108,99,255,0.25);
+  }
+
+  .dual-range input[type=range]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    pointer-events: all;
+  }
+
+  .feather-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  /* Single range for feather */
+  input.single-range {
+    width: 100%;
+    height: 4px;
+    background: var(--surface2);
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input.single-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--accent);
+    cursor: pointer;
+  }
+
+  .dl-btn {
+    margin: 14px 16px 16px;
+    width: calc(100% - 32px);
+    padding: 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    margin-top: auto;
+  }
+
+  .dl-btn:disabled { opacity: 0.3; cursor: default; }
+  .dl-btn:not(:disabled):hover { opacity: 0.9; }
+  .dl-btn:not(:disabled):active { transform: scale(0.98); }
+
+  .hint-bar {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 5px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>BG_REMOVER</h1>
+    <label class="upload" for="fileIn">OPEN IMAGE</label>
+    <input type="file" id="fileIn" accept="image/*">
+    <div class="mode-pill">
+      <button id="btnClick" class="active">CLICK</button>
+      <button id="btnDrag">DRAG</button>
+    </div>
+  </header>
+
+  <div class="canvases" id="canvasArea">
+    <div class="canvas-wrap" id="srcWrap">
+      <span class="canvas-label">source</span>
+      <div class="empty-state" id="emptyState">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <span style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;">open an image to begin</span>
+      </div>
+      <canvas id="srcCanvas" style="display:none;"></canvas>
+      <div class="hint-bar" id="hintBar" style="display:none;">click a pixel — or drag to select region</div>
+    </div>
+    <div class="canvas-wrap">
+      <span class="canvas-label">result</span>
+      <canvas id="dstCanvas" style="display:none;"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section">
+      <div class="section-title">color targets <span style="color:var(--accent);font-size:9px;">(max 5)</span></div>
+      <div class="color-slots" id="colorSlots"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">hsv range</div>
+      <div class="hsv-ranges">
+        <div class="range-row">
+          <div class="range-header">
+            <span class="range-label">Hue</span>
+            <span class="range-values" id="hDisplay">0 – 179</span>
+          </div>
+          <div class="dual-range" id="hRange">
+            <div class="track"></div>
+            <div class="fill" id="hFill"></div>
+            <input type="range" id="hMin" min="0" max="179" value="0" step="1">
+            <input type="range" id="hMax" min="0" max="179" value="179" step="1">
+          </div>
+        </div>
+        <div class="range-row">
+          <div class="range-header">
+            <span class="range-label">Saturation</span>
+            <span class="range-values" id="sDisplay">0 – 255</span>
+          </div>
+          <div class="dual-range" id="sRange">
+            <div class="track"></div>
+            <div class="fill" id="sFill"></div>
+            <input type="range" id="sMin" min="0" max="255" value="0" step="1">
+            <input type="range" id="sMax" min="0" max="255" value="255" step="1">
+          </div>
+        </div>
+        <div class="range-row">
+          <div class="range-header">
+            <span class="range-label">Value</span>
+            <span class="range-values" id="vDisplay">0 – 255</span>
+          </div>
+          <div class="dual-range" id="vRange">
+            <div class="track"></div>
+            <div class="fill" id="vFill"></div>
+            <input type="range" id="vMin" min="0" max="255" value="0" step="1">
+            <input type="range" id="vMax" min="0" max="255" value="255" step="1">
+          </div>
+        </div>
+        <div class="feather-row">
+          <div class="range-header">
+            <span class="range-label">Edge Feather</span>
+            <span class="range-values" id="featherDisplay">0px</span>
+          </div>
+          <input type="range" class="single-range" id="feather" min="0" max="12" value="0" step="1">
+        </div>
+      </div>
+    </div>
+
+    <button class="dl-btn" id="dlBtn" disabled>EXPORT PNG</button>
+  </div>
+</div>
+
+<script>
+const MAX_SLOTS = 5;
+const SLOT_COLORS = ['#6c63ff','#ff6584','#43e8b0','#ffd460','#ff9f43'];
+
+let imgEl = null, mode = 'click';
+let slots = []; // {r,g,b,h,s,v,hMin,hMax,sMin,sMax,vMin,vMax,enabled}
+let activeSlotIdx = -1;
+let dragStart = null, dragCurrent = null, isDragging = false;
+
+const srcCanvas = document.getElementById('srcCanvas');
+const dstCanvas = document.getElementById('dstCanvas');
+const sCtx = srcCanvas.getContext('2d');
+const dCtx = dstCanvas.getContext('2d');
+const emptyState = document.getElementById('emptyState');
+const hintBar = document.getElementById('hintBar');
+const colorSlotsEl = document.getElementById('colorSlots');
+const dlBtn = document.getElementById('dlBtn');
+const btnClick = document.getElementById('btnClick');
+const btnDrag = document.getElementById('btnDrag');
+
+// Slider references
+const hMinS = document.getElementById('hMin'), hMaxS = document.getElementById('hMax');
+const sMinS = document.getElementById('sMin'), sMaxS = document.getElementById('sMax');
+const vMinS = document.getElementById('vMin'), vMaxS = document.getElementById('vMax');
+const featherS = document.getElementById('feather');
+const hDisplay = document.getElementById('hDisplay'), sDisplay = document.getElementById('sDisplay'), vDisplay = document.getElementById('vDisplay');
+const featherDisplay = document.getElementById('featherDisplay');
+const hFill = document.getElementById('hFill'), sFill = document.getElementById('sFill'), vFill = document.getElementById('vFill');
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+  let h = 0, s = max === 0 ? 0 : d / max, v = max;
+  if (d !== 0) {
+    switch(max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return [Math.round(h * 179), Math.round(s * 255), Math.round(v * 255)];
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+
+function canvasCoords(e) {
+  const rect = srcCanvas.getBoundingClientRect();
+  const scaleX = srcCanvas.width / rect.width;
+  const scaleY = srcCanvas.height / rect.height;
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  return [Math.round((cx - rect.left) * scaleX), Math.round((cy - rect.top) * scaleY)];
+}
+
+function samplePixel(x, y) {
+  const d = sCtx.getImageData(x, y, 1, 1).data;
+  return [d[0], d[1], d[2]];
+}
+
+function sampleRegion(x1, y1, x2, y2) {
+  const lx = Math.max(0, Math.min(x1,x2));
+  const ly = Math.max(0, Math.min(y1,y2));
+  const rx = Math.min(srcCanvas.width - 1, Math.max(x1,x2));
+  const ry = Math.min(srcCanvas.height - 1, Math.max(y1,y2));
+  if (rx <= lx || ry <= ly) return null;
+  const data = sCtx.getImageData(lx, ly, rx - lx, ry - ly).data;
+  let hMin=179, hMax=0, sMin=255, sMax=0, vMin=255, vMax=0;
+  let sumR=0, sumG=0, sumB=0, n=0;
+  for (let i = 0; i < data.length; i += 4) {
+    const [h,s,v] = rgbToHsv(data[i], data[i+1], data[i+2]);
+    hMin=Math.min(hMin,h); hMax=Math.max(hMax,h);
+    sMin=Math.min(sMin,s); sMax=Math.max(sMax,s);
+    vMin=Math.min(vMin,v); vMax=Math.max(vMax,v);
+    sumR+=data[i]; sumG+=data[i+1]; sumB+=data[i+2]; n++;
+  }
+  return { hMin, hMax, sMin, sMax, vMin, vMax,
+    r: Math.round(sumR/n), g: Math.round(sumG/n), b: Math.round(sumB/n) };
+}
+
+function addSlot(r, g, b, hMin, hMax, sMin, sMax, vMin, vMax) {
+  if (slots.length >= MAX_SLOTS) return;
+  const [h,s,v] = rgbToHsv(r, g, b);
+  const slot = { r, g, b, h, s, v, hMin, hMax, sMin, sMax, vMin, vMax, enabled: true };
+  slots.push(slot);
+  activeSlotIdx = slots.length - 1;
+  renderSlots();
+  loadSlotToSliders(activeSlotIdx);
+  processImage();
+}
+
+function renderSlots() {
+  colorSlotsEl.innerHTML = '';
+  slots.forEach((slot, i) => {
+    const el = document.createElement('div');
+    el.className = 'color-slot has-color' + (i === activeSlotIdx ? ' active-slot' : '');
+    el.style.cursor = 'pointer';
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'slot-check';
+    check.checked = slot.enabled;
+    check.style.accentColor = SLOT_COLORS[i % SLOT_COLORS.length];
+    check.addEventListener('change', e => {
+      e.stopPropagation();
+      slots[i].enabled = check.checked;
+      processImage();
+    });
+
+    const swatch = document.createElement('div');
+    swatch.className = 'slot-swatch';
+    swatch.style.background = rgbToHex(slot.r, slot.g, slot.b);
+    swatch.style.borderColor = SLOT_COLORS[i % SLOT_COLORS.length];
+
+    const info = document.createElement('div');
+    info.className = 'slot-info';
+    info.innerHTML = `<div class="slot-hex">${rgbToHex(slot.r, slot.g, slot.b)}</div>
+      <div class="slot-hsv">H:${slot.hMin}–${slot.hMax} S:${slot.sMin}–${slot.sMax} V:${slot.vMin}–${slot.vMax}</div>`;
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'slot-clear';
+    clearBtn.innerHTML = '×';
+    clearBtn.title = 'Remove';
+    clearBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      slots.splice(i, 1);
+      if (activeSlotIdx >= slots.length) activeSlotIdx = slots.length - 1;
+      renderSlots();
+      if (activeSlotIdx >= 0) loadSlotToSliders(activeSlotIdx);
+      processImage();
+    });
+
+    el.addEventListener('click', () => {
+      activeSlotIdx = i;
+      renderSlots();
+      loadSlotToSliders(i);
+    });
+
+    el.appendChild(check);
+    el.appendChild(swatch);
+    el.appendChild(info);
+    el.appendChild(clearBtn);
+    colorSlotsEl.appendChild(el);
+  });
+
+  if (slots.length < MAX_SLOTS) {
+    const hint = document.createElement('div');
+    hint.className = 'color-slot';
+    hint.style.borderStyle = 'dashed';
+    hint.innerHTML = `<span class="slot-empty-hint">${slots.length === 0 ? 'sample a color from the image' : 'click/drag image to add another color'}</span>`;
+    colorSlotsEl.appendChild(hint);
+  }
+}
+
+function loadSlotToSliders(idx) {
+  if (idx < 0 || idx >= slots.length) return;
+  const s = slots[idx];
+  hMinS.value = s.hMin; hMaxS.value = s.hMax;
+  sMinS.value = s.sMin; sMaxS.value = s.sMax;
+  vMinS.value = s.vMin; vMaxS.value = s.vMax;
+  updateSliderDisplays();
+}
+
+function saveActiveSlotFromSliders() {
+  if (activeSlotIdx < 0 || activeSlotIdx >= slots.length) return;
+  const s = slots[activeSlotIdx];
+  s.hMin = +hMinS.value; s.hMax = +hMaxS.value;
+  s.sMin = +sMinS.value; s.sMax = +sMaxS.value;
+  s.vMin = +vMinS.value; s.vMax = +vMaxS.value;
+  renderSlots();
+}
+
+function updateFill(fillEl, minInput, maxInput) {
+  const min = +minInput.value, max = +maxInput.value;
+  const total = +maxInput.max - +maxInput.min;
+  const left = (min / total) * 100;
+  const right = (max / total) * 100;
+  fillEl.style.left = left + '%';
+  fillEl.style.width = (right - left) + '%';
+}
+
+function updateSliderDisplays() {
+  let hmin = +hMinS.value, hmax = +hMaxS.value;
+  let smin = +sMinS.value, smax = +sMaxS.value;
+  let vmin = +vMinS.value, vmax = +vMaxS.value;
+  if (hmin > hmax) { [hmin, hmax] = [hmax, hmin]; }
+  if (smin > smax) { [smin, smax] = [smax, smin]; }
+  if (vmin > vmax) { [vmin, vmax] = [vmax, vmin]; }
+  hDisplay.textContent = `${hmin} – ${hmax}`;
+  sDisplay.textContent = `${smin} – ${smax}`;
+  vDisplay.textContent = `${vmin} – ${vmax}`;
+  featherDisplay.textContent = featherS.value + 'px';
+  updateFill(hFill, hMinS, hMaxS);
+  updateFill(sFill, sMinS, sMaxS);
+  updateFill(vFill, vMinS, vMaxS);
+}
+
+[hMinS, hMaxS, sMinS, sMaxS, vMinS, vMaxS].forEach(s => {
+  s.addEventListener('input', () => {
+    updateSliderDisplays();
+    saveActiveSlotFromSliders();
+    processImage();
+  });
+});
+
+featherS.addEventListener('input', () => {
+  featherDisplay.textContent = featherS.value + 'px';
+  processImage();
+});
+
+function gaussianBlur1D(data, w, h, sigma) {
+  const ks = Math.ceil(sigma * 2.5) * 2 + 1;
+  const kernel = [];
+  let ksum = 0;
+  for (let k = 0; k < ks; k++) {
+    const x = k - Math.floor(ks / 2);
+    kernel.push(Math.exp(-x * x / (2 * sigma * sigma)));
+    ksum += kernel[kernel.length - 1];
+  }
+  for (let k = 0; k < ks; k++) kernel[k] /= ksum;
+  const tmp = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let k = 0; k < ks; k++) {
+      const nx = Math.min(Math.max(x + k - Math.floor(ks / 2), 0), w - 1);
+      sum += kernel[k] * data[y * w + nx];
+    }
+    tmp[y * w + x] = sum;
+  }
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let k = 0; k < ks; k++) {
+      const ny = Math.min(Math.max(y + k - Math.floor(ks / 2), 0), h - 1);
+      sum += kernel[k] * tmp[ny * w + x];
+    }
+    out[y * w + x] = sum;
+  }
+  return out;
+}
+
+function processImage() {
+  if (!imgEl) return;
+  const w = srcCanvas.width, h = srcCanvas.height;
+  dstCanvas.width = w; dstCanvas.height = h;
+  const src = sCtx.getImageData(0, 0, w, h);
+  const dst = dCtx.createImageData(w, h);
+  const feather = +featherS.value;
+
+  const enabledSlots = slots.filter(s => s.enabled);
+
+  const alpha = new Uint8Array(w * h);
+  for (let i = 0; i < src.data.length; i += 4) {
+    const [hh, ss, vv] = rgbToHsv(src.data[i], src.data[i+1], src.data[i+2]);
+    let remove = false;
+    for (const slot of enabledSlots) {
+      const hmin = Math.min(slot.hMin, slot.hMax), hmax = Math.max(slot.hMin, slot.hMax);
+      const smin = Math.min(slot.sMin, slot.sMax), smax = Math.max(slot.sMin, slot.sMax);
+      const vmin = Math.min(slot.vMin, slot.vMax), vmax = Math.max(slot.vMin, slot.vMax);
+      if (hh >= hmin && hh <= hmax && ss >= smin && ss <= smax && vv >= vmin && vv <= vmax) {
+        remove = true; break;
+      }
+    }
+    alpha[i >> 2] = remove ? 0 : 255;
+  }
+
+  let finalAlpha = alpha;
+  if (feather > 0) {
+    const blurred = gaussianBlur1D(alpha, w, h, feather * 0.8);
+    finalAlpha = blurred.map(v => Math.round(v));
+  }
+
+  for (let i = 0; i < src.data.length; i += 4) {
+    dst.data[i] = src.data[i];
+    dst.data[i+1] = src.data[i+1];
+    dst.data[i+2] = src.data[i+2];
+    dst.data[i+3] = finalAlpha[i >> 2];
+  }
+  dCtx.putImageData(dst, 0, 0);
+  dlBtn.disabled = false;
+}
+
+// Canvas interactions
+srcCanvas.addEventListener('mousedown', e => {
+  if (!imgEl) return;
+  const [x, y] = canvasCoords(e);
+  if (mode === 'click') {
+    const [r, g, b] = samplePixel(x, y);
+    const [h, s, v] = rgbToHsv(r, g, b);
+    const pad = 8;
+    addSlot(r, g, b,
+      Math.max(0, h - pad), Math.min(179, h + pad),
+      Math.max(0, s - 30), Math.min(255, s + 30),
+      Math.max(0, v - 30), Math.min(255, v + 30));
+  } else {
+    dragStart = [x, y]; dragCurrent = [x, y]; isDragging = true;
+  }
+});
+
+srcCanvas.addEventListener('mousemove', e => {
+  if (!isDragging || mode !== 'drag') return;
+  dragCurrent = canvasCoords(e);
+  sCtx.clearRect(0, 0, srcCanvas.width, srcCanvas.height);
+  sCtx.drawImage(imgEl, 0, 0, srcCanvas.width, srcCanvas.height);
+  const [x1,y1] = dragStart, [x2,y2] = dragCurrent;
+  sCtx.strokeStyle = '#6c63ff';
+  sCtx.lineWidth = 1.5;
+  sCtx.setLineDash([5, 3]);
+  sCtx.strokeRect(x1, y1, x2-x1, y2-y1);
+  sCtx.fillStyle = 'rgba(108,99,255,0.1)';
+  sCtx.fillRect(x1, y1, x2-x1, y2-y1);
+  sCtx.setLineDash([]);
+});
+
+srcCanvas.addEventListener('mouseup', e => {
+  if (!isDragging || mode !== 'drag') return;
+  isDragging = false;
+  dragCurrent = canvasCoords(e);
+  const result = sampleRegion(dragStart[0], dragStart[1], dragCurrent[0], dragCurrent[1]);
+  sCtx.clearRect(0,0,srcCanvas.width,srcCanvas.height);
+  sCtx.drawImage(imgEl, 0, 0, srcCanvas.width, srcCanvas.height);
+  if (result) addSlot(result.r, result.g, result.b, result.hMin, result.hMax, result.sMin, result.sMax, result.vMin, result.vMax);
+  dragStart = null; dragCurrent = null;
+});
+
+srcCanvas.addEventListener('mouseleave', () => {
+  if (isDragging) {
+    isDragging = false;
+    sCtx.clearRect(0,0,srcCanvas.width,srcCanvas.height);
+    sCtx.drawImage(imgEl, 0, 0, srcCanvas.width, srcCanvas.height);
+  }
+});
+
+btnClick.addEventListener('click', () => {
+  mode = 'click';
+  btnClick.classList.add('active'); btnDrag.classList.remove('active');
+});
+btnDrag.addEventListener('click', () => {
+  mode = 'drag';
+  btnDrag.classList.add('active'); btnClick.classList.remove('active');
+});
+
+document.getElementById('fileIn').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    imgEl = new Image();
+    imgEl.onload = () => {
+      const maxW = 700, maxH = window.innerHeight - 120;
+      let w = imgEl.width, h = imgEl.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+      srcCanvas.width = w; srcCanvas.height = h;
+      dstCanvas.width = w; dstCanvas.height = h;
+      sCtx.drawImage(imgEl, 0, 0, w, h);
+      srcCanvas.style.display = 'block';
+      dstCanvas.style.display = 'block';
+      emptyState.style.display = 'none';
+      hintBar.style.display = 'block';
+      slots = []; activeSlotIdx = -1;
+      renderSlots();
+      dlBtn.disabled = true;
+      dCtx.clearRect(0, 0, w, h);
+    };
+    imgEl.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+dlBtn.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = 'result.png';
+  a.href = dstCanvas.toDataURL('image/png');
+  a.click();
+});
+
+// Init
+renderSlots();
+updateSliderDisplays();
+</script>
+</body>
+</html>
